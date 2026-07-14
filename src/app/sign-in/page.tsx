@@ -1,57 +1,129 @@
-'use client'
-import { useRouter } from "next/navigation";
-import React, {useState} from "react";
-import { authClient } from "@/lib/auth-client";
+"use client"
 
-function Signin(){
+import React, { useState } from "react"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { Controller, useForm } from "react-hook-form"
+import { toast, Toaster } from "sonner"
+import * as z from "zod"
+import { authClient } from "@/lib/auth-client"
 
-    const router = useRouter();
+import { Button } from "@/components/ui/button"
+import { useRouter } from "next/navigation"
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { Loader2 } from "lucide-react"
+import Link from "next/link"
+import { signInSchema } from "@/schemas/signInSchema"
 
-    const [email, setEmail] = useState('')
-    const [password, setPassword] = useState('')
+const SignInPage = () => {
 
-    const handleSignin = async () => {
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const router =  useRouter()
 
-        const { data, error } = await authClient.signIn.email({
-            email, // required
-            password, // required
-            rememberMe: true,
-            callbackURL: "/dashboard",
+    // zod implementation
+    const form = useForm<z.infer<typeof signInSchema>>({
+        resolver: zodResolver(signInSchema),
+        defaultValues: {
+            identifier: "",
+            password: "", 
+            
+        }
+    })
 
-        }, {
-            onRequest: (ctx) => {
-                console.log("Making Request")
-            },
-            onSuccess(ctx) {
-                router.push("/dashboard")
-            },
-            onError(ctx){
-                console.log("Error", ctx)
+    const onSubmit = async (formData: z.infer<typeof signInSchema>) => {
+        setIsSubmitting(true)
+        try {
+            const { error } = await authClient.signIn.email({
+                email: formData.identifier,
+                password: formData.password,
+                callbackURL: "/dashboard",
+                rememberMe: false,
+            })
+
+            if (error) {
+                toast.error(error.message ?? "Sign in failed")
+                return
             }
-        });
-        console.log(data);
+
+            toast.success("Signed in successfully")
+            router.push("/dashboard")
+        } catch {
+            toast.error("Something went wrong while signing in")
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
-    const handleGoogleSignIn = async () => {
-        const data = await authClient.signIn.social({
-            provider: "google",
-        });
-        console.log(data)
-    };
-
     return (
-        <div>
-            <label htmlFor="email">Email: </label>
-            <input onChange={(e) => setEmail(e.target.value)} type="email" name="" id="email" placeholder="Enter Email" />
-            <br />
-            <label htmlFor="password">Password: </label>
-            <input onChange={(e) => setPassword(e.target.value)} type="password" name="" id="password" placeholder="Enter Password" />
-            <hr />
-            <button onClick={handleSignin} >Sign In</button>
-            <hr />
-            <button onClick={handleGoogleSignIn}>Sign In by Google</button>
+        <div className="flex justify-center items-center min-h-screen bg-gray-100">
+            <Toaster />
+            <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
+            <div className="text-center">
+                <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl mb-6">Join Mystery Message</h1>
+                <p className="mb-4">Sign In to start your anonymous adventure</p>
+            </div>
+            <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)}>
+                <FieldGroup>
+                    <Controller
+                        name="identifier"
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                            <Field data-invalid={fieldState.invalid}>
+                                <FieldLabel htmlFor="email">Email</FieldLabel>
+                                <Input
+                                    {...field}
+                                    id="email"
+                                    aria-invalid={fieldState.invalid}
+                                    placeholder="Enter your email"
+                                />
+                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                            </Field>
+                        )}
+                    />
+                    <Controller
+                        name="password"
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                            <Field data-invalid={fieldState.invalid}>
+                                <FieldLabel htmlFor="password">Password</FieldLabel>
+                                <Input
+                                    {...field}
+                                    id="password"
+                                    aria-invalid={fieldState.invalid}
+                                    placeholder="Enter password"
+                                    autoComplete="current-password"
+                                />
+                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                            </Field>
+                        )}
+                    />
+                </FieldGroup>
+                <div className="flex justify-end">
+                    <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? (
+                        <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Please wait
+                        </>) : ("Sign In")}
+                    </Button>
+                </div>
+            </form>
+            <div className="text-center mt-4">
+                <p>
+                    Register yourself!{' '}
+                    <Link href="/sign-up" className="text-blue-600 hover:text-blue-800">
+                        Sign Up
+                    </Link>
+                </p>
+            </div>
+            </div>
+            
         </div>
     )
 }
 
-export default Signin
+export default SignInPage;

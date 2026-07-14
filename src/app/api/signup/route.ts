@@ -10,6 +10,7 @@ export async function POST(request: Request){
     try{
         await dbConnect();
         const {username, email, password} = await request.json()
+        let emailDeliveryFailed = false
         const existingUserVerifiedByUsername = await UserModel.findOne({
             username,
             isVerified: true
@@ -39,9 +40,10 @@ export async function POST(request: Request){
                 await existingUserByEmail.save()
                 try {
                     await auth.api.signUpEmail({ body: { email, password, name: username } })
-                } catch(e: any) {
-                    console.log("Better Auth error:", JSON.stringify(e))
-                    if (e?.body?.code !== "USER_ALREADY_EXISTS") throw e
+                } catch(e) {
+                    const err = e as { body?: { code?: string } };
+                    console.log("Better Auth error:", JSON.stringify(err))
+                    if (err?.body?.code !== "USER_ALREADY_EXISTS") throw e
                 }
             }
         } else {
@@ -57,14 +59,15 @@ export async function POST(request: Request){
                 verifyCodeExpiry: expiryDate,
                 isVerified: false,
                 isAcceptingMessage: true,
-                messages: []
+                message: []
             })
             await newUser.save()
             try {
                 await auth.api.signUpEmail({ body: { email, password, name: username } })
-            } catch(e: any) {
-                console.log("Better Auth error:", JSON.stringify(e))
-                if (e?.body?.code !== "USER_ALREADY_EXISTS") throw e
+            } catch(e) {
+                const err = e as { body?: { code?: string } };
+                console.log("Better Auth error:", JSON.stringify(err))
+                if (err?.body?.code !== "USER_ALREADY_EXISTS") throw e
             }
         }
 
@@ -75,15 +78,15 @@ export async function POST(request: Request){
             verifyCode
         )
         if(!emailResponse.success){
-            return Response.json({
-                success: false,
-                message: emailResponse.message
-            }, {status: 500})
+            emailDeliveryFailed = true
+            console.error("Verification email failed", emailResponse.message)
         }
 
         return Response.json({
             success: true,
-            message: "User registered successfully. Please verify your email"
+            message: emailDeliveryFailed
+                ? "User registered successfully, but verification email could not be sent."
+                : "User registered successfully. Please verify your email"
         }, {status: 201})
 
     } catch(err){
